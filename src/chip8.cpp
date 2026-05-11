@@ -1,174 +1,70 @@
-#include <SDL2/SDL.h>
-#include <chrono>
-#include <cstdint>
-#include <cstring>
+#include "chip8.h"
+#include <SDL3/SDL.h>
 #include <fstream>
-#include <iostream>
-#include <random>
 
-const unsigned int START_ADDRESS{0x200};
+// initiall set pc to 0x200 since that is going to be the first instruction
+Chip8::Chip8()
+    : pc(START_ADDRESS),
+      randGen(std::chrono::system_clock::now().time_since_epoch().count()) {
+  // set randByte
+  randByte = std::uniform_int_distribution<uint8_t>(0, 255U);
 
-const unsigned int FONTSET_SIZE{80};
+  // load font
+  for (int i = 0; i < FONTSET_SIZE; ++i) {
+    memory[FONT_START_ADDRESS + i] = fontset[i];
+  }
 
-const unsigned int FONT_START_ADDRESS{0x050};
-constexpr unsigned int VIDEO_WIDTH{64};
-constexpr unsigned int VIDEO_HEIGHT{32};
+  table[0x0] = &Chip8::Table0;
+  table[0x1] = &Chip8::OP_1nnn;
+  table[0x2] = &Chip8::OP_2nnn;
+  table[0x3] = &Chip8::OP_3xkk;
+  table[0x4] = &Chip8::OP_4xkk;
+  table[0x5] = &Chip8::OP_5xy0;
+  table[0x6] = &Chip8::OP_6xkk;
+  table[0x7] = &Chip8::OP_7xkk;
+  table[0x8] = &Chip8::Table8;
+  table[0x9] = &Chip8::OP_9xy0;
+  table[0xA] = &Chip8::OP_Annn;
+  table[0xB] = &Chip8::OP_Bnnn;
+  table[0xC] = &Chip8::OP_Cxkk;
+  table[0xD] = &Chip8::OP_Dxyn;
+  table[0xE] = &Chip8::TableE;
+  table[0xF] = &Chip8::TableF;
 
-uint8_t fontset[FONTSET_SIZE]{
-    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
-    0x20, 0x60, 0x20, 0x20, 0x70, // 1
-    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
-    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
-    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
-    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
-    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
-    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
-    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
-    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
-    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
-    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
-    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
-    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
-    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
-    0xF0, 0x80, 0xF0, 0x80, 0x80  // F
-};
+  for (int i = 0; i <= 0xE; ++i) {
+    table0[i] = &Chip8::OP_NULL;
+    table8[i] = &Chip8::OP_NULL;
+    tableE[i] = &Chip8::OP_NULL;
+  }
 
-class Chip8 {
-public:
-  // initiall set pc to 0x200 since that is going to be the first instruction
-  Chip8()
-      : pc(START_ADDRESS),
-        randGen(std::chrono::system_clock::now().time_since_epoch().count()) {
-    // set randByte
-    randByte = std::uniform_int_distribution<uint8_t>(0, 255U);
+  table0[0x0] = &Chip8::OP_00E0;
+  table0[0xE] = &Chip8::OP_00EE;
 
-    // load font
-    for (int i = 0; i < FONTSET_SIZE; ++i) {
-      memory[FONT_START_ADDRESS + i] = fontset[i];
-    }
+  table8[0x0] = &Chip8::OP_8xy0;
+  table8[0x2] = &Chip8::OP_8xy1;
+  table8[0x3] = &Chip8::OP_8xy2;
+  table8[0x4] = &Chip8::OP_8xy3;
+  table8[0x5] = &Chip8::OP_8xy4;
+  table8[0x6] = &Chip8::OP_8xy5;
+  table8[0x7] = &Chip8::OP_8xy6;
+  table8[0xE] = &Chip8::OP_8xyE;
 
-    table[0x0] = &Chip8::Table0;
-    table[0x1] = &Chip8::OP_1nnn;
-    table[0x2] = &Chip8::OP_2nnn;
-    table[0x3] = &Chip8::OP_3xkk;
-    table[0x4] = &Chip8::OP_4xkk;
-    table[0x5] = &Chip8::OP_5xy0;
-    table[0x6] = &Chip8::OP_6xkk;
-    table[0x7] = &Chip8::OP_7xkk;
-    table[0x8] = &Chip8::Table8;
-    table[0x9] = &Chip8::OP_9xy0;
-    table[0xA] = &Chip8::OP_Annn;
-    table[0xB] = &Chip8::OP_Bnnn;
-    table[0xC] = &Chip8::OP_Cxkk;
-    table[0xD] = &Chip8::OP_Dxyn;
-    table[0xE] = &Chip8::TableE;
-    table[0xF] = &Chip8::TableF;
+  tableE[0x1] = &Chip8::OP_ExA1;
+  tableE[0xE] = &Chip8::OP_Ex9E;
 
-    for (int i = 0; i <= 0xE; ++i) {
-      table0[i] = &Chip8::OP_NULL;
-      table8[i] = &Chip8::OP_NULL;
-      tableE[i] = &Chip8::OP_NULL;
-    }
+  for (int i = 0; i <= 65; ++i) {
+    tableF[i] = &Chip8::OP_NULL;
+  }
 
-    table0[0x0] = &Chip8::OP_00E0;
-    table0[0xE] = &Chip8::OP_00EE;
-
-    table8[0x0] = &Chip8::OP_8xy0;
-    table8[0x2] = &Chip8::OP_8xy1;
-    table8[0x3] = &Chip8::OP_8xy2;
-    table8[0x4] = &Chip8::OP_8xy3;
-    table8[0x5] = &Chip8::OP_8xy4;
-    table8[0x6] = &Chip8::OP_8xy5;
-    table8[0x7] = &Chip8::OP_8xy6;
-    table8[0xE] = &Chip8::OP_8xyE;
-
-    tableE[0x1] = &Chip8::OP_ExA1;
-    tableE[0xE] = &Chip8::OP_Ex9E;
-
-    for (int i = 0; i <= 65; ++i) {
-      tableF[i] = &Chip8::OP_NULL;
-    }
-
-    tableF[0x07] = &Chip8::OP_Fx07;
-    tableF[0x0A] = &Chip8::OP_Fx0A;
-    tableF[0x15] = &Chip8::OP_Fx15;
-    tableF[0x18] = &Chip8::OP_Fx18;
-    tableF[0x1E] = &Chip8::OP_Fx1E;
-    tableF[0x29] = &Chip8::OP_Fx29;
-    tableF[0x33] = &Chip8::OP_Fx33;
-    tableF[0x55] = &Chip8::OP_Fx55;
-    tableF[0x65] = &Chip8::OP_Fx65;
-  };
-
-  void Table0() { ((*this).*(table0[opcode & 0x000Fu]))(); }
-  void Table8() { ((*this).*(table8[opcode & 0x000Fu]))(); }
-  void TableE() { ((*this).*(tableE[opcode & 0x000Fu]))(); }
-  void TableF() { ((*this).*(tableF[opcode & 0x00FFu]))(); }
-  void OP_NULL() {};
-
-  typedef void (Chip8::*Chip8Func)();
-
-  Chip8Func table[0xF + 1];
-  Chip8Func table0[0xE + 1];
-  Chip8Func table8[0xE + 1];
-  Chip8Func tableE[0xE + 1];
-  Chip8Func tableF[0x65 + 1];
-
-  uint8_t registers[16]{}; // 16 8bit general purpose registers
-  uint8_t memory[4096]{};  // 4096 bytes of memory
-  uint16_t index{}; // special register that holds the memory address to be used
-                    // in operations
-  uint16_t pc{};    // holds the next instruction
-  uint16_t stack[16]{}; // holds pc values of when a function is called, will
-                        // place back into pc when return
-  uint8_t sp{};         // stack pointer where we are in the stack
-  uint8_t delayTimer{}; // both timers are either 0 or not 0
-  uint8_t soundTimer{};
-  uint8_t keypad[16]{}; // 16 keys for the keypad
-
-  uint32_t video[64 * 32]{}; // using uint32 for compatibility with sdl, screen
-                             // of 64 by 32
-  uint16_t opcode; // stores the operation, operations are 2 bytes long
-  std::default_random_engine randGen;
-  std::uniform_int_distribution<uint8_t> randByte;
-  void loadROM(char const *);
-  void cycle();
-
-  // instructions
-  void OP_00E0();
-  void OP_00EE();
-  void OP_1nnn();
-  void OP_2nnn();
-  void OP_3xkk();
-  void OP_4xkk();
-  void OP_5xy0();
-  void OP_6xkk();
-  void OP_7xkk();
-  void OP_8xy0();
-  void OP_8xy1();
-  void OP_8xy2();
-  void OP_8xy3();
-  void OP_8xy4();
-  void OP_8xy5();
-  void OP_8xy6();
-  void OP_8xy7();
-  void OP_8xyE();
-  void OP_9xy0();
-  void OP_Annn();
-  void OP_Bnnn();
-  void OP_Cxkk();
-  void OP_Dxyn();
-  void OP_Ex9E();
-  void OP_ExA1();
-  void OP_Fx07();
-  void OP_Fx0A();
-  void OP_Fx15();
-  void OP_Fx18();
-  void OP_Fx1E();
-  void OP_Fx29();
-  void OP_Fx33();
-  void OP_Fx55();
-  void OP_Fx65();
+  tableF[0x07] = &Chip8::OP_Fx07;
+  tableF[0x0A] = &Chip8::OP_Fx0A;
+  tableF[0x15] = &Chip8::OP_Fx15;
+  tableF[0x18] = &Chip8::OP_Fx18;
+  tableF[0x1E] = &Chip8::OP_Fx1E;
+  tableF[0x29] = &Chip8::OP_Fx29;
+  tableF[0x33] = &Chip8::OP_Fx33;
+  tableF[0x55] = &Chip8::OP_Fx55;
+  tableF[0x65] = &Chip8::OP_Fx65;
 };
 
 void Chip8::loadROM(char const *filename) {
@@ -203,7 +99,17 @@ void Chip8::cycle() {
   pc += 2;
 
   // decode and execute;
-  (*this.*table[(opcode & 0xF000u) >> 12u])();
+  ((*this).*(table[(opcode & 0xF000u) >> 12u]))();
+
+  // decrement the delay timer if it's been set
+  if (delayTimer > 0) {
+    --delayTimer;
+  }
+
+  // decrement the sound timer if it's been set
+  if (soundTimer > 0) {
+    --soundTimer;
+  }
 }
 
 void Chip8::OP_00E0() { memset(video, 0, sizeof(video)); }
@@ -527,235 +433,4 @@ void Chip8::OP_Fx65() {
   }
 }
 
-class Platform {
-public:
-  Platform(char const *title, int windowWidth, int windowHeight,
-           int textureWidth, int textureHeight) {
-    SDL_Init(SDL_INIT_VIDEO);
-
-    window = SDL_CreateWindow(title, 0, 0, windowWidth, windowHeight,
-                              SDL_WINDOW_SHOWN);
-
-    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-
-    texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA8888,
-                                SDL_TEXTUREACCESS_STREAMING, textureWidth,
-                                textureHeight);
-  }
-
-  ~Platform() {
-    SDL_DestroyTexture(texture);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-  }
-
-  void Update(void const *buffer, int pitch) {
-    SDL_UpdateTexture(texture, nullptr, buffer, pitch);
-    SDL_RenderClear(renderer);
-    SDL_RenderCopy(renderer, texture, nullptr, nullptr);
-    SDL_RenderPresent(renderer);
-  }
-
-  bool ProcessInput(uint8_t *keys) {
-    bool quit = false;
-
-    SDL_Event event;
-
-    while (SDL_PollEvent(&event)) {
-      switch (event.type) {
-      case SDL_QUIT: {
-        quit = true;
-      } break;
-
-      case SDL_KEYDOWN: {
-        switch (event.key.keysym.sym) {
-        case SDLK_ESCAPE: {
-          quit = true;
-        } break;
-
-        case SDLK_x: {
-          keys[0] = 1;
-        } break;
-
-        case SDLK_1: {
-          keys[1] = 1;
-        } break;
-
-        case SDLK_2: {
-          keys[2] = 1;
-        } break;
-
-        case SDLK_3: {
-          keys[3] = 1;
-        } break;
-
-        case SDLK_q: {
-          keys[4] = 1;
-        } break;
-
-        case SDLK_w: {
-          keys[5] = 1;
-        } break;
-
-        case SDLK_e: {
-          keys[6] = 1;
-        } break;
-
-        case SDLK_a: {
-          keys[7] = 1;
-        } break;
-
-        case SDLK_s: {
-          keys[8] = 1;
-        } break;
-
-        case SDLK_d: {
-          keys[9] = 1;
-        } break;
-
-        case SDLK_z: {
-          keys[0xA] = 1;
-        } break;
-
-        case SDLK_c: {
-          keys[0xB] = 1;
-        } break;
-
-        case SDLK_4: {
-          keys[0xC] = 1;
-        } break;
-
-        case SDLK_r: {
-          keys[0xD] = 1;
-        } break;
-
-        case SDLK_f: {
-          keys[0xE] = 1;
-        } break;
-
-        case SDLK_v: {
-          keys[0xF] = 1;
-        } break;
-        }
-      } break;
-
-      case SDL_KEYUP: {
-        switch (event.key.keysym.sym) {
-        case SDLK_x: {
-          keys[0] = 0;
-        } break;
-
-        case SDLK_1: {
-          keys[1] = 0;
-        } break;
-
-        case SDLK_2: {
-          keys[2] = 0;
-        } break;
-
-        case SDLK_3: {
-          keys[3] = 0;
-        } break;
-
-        case SDLK_q: {
-          keys[4] = 0;
-        } break;
-
-        case SDLK_w: {
-          keys[5] = 0;
-        } break;
-
-        case SDLK_e: {
-          keys[6] = 0;
-        } break;
-
-        case SDLK_a: {
-          keys[7] = 0;
-        } break;
-
-        case SDLK_s: {
-          keys[8] = 0;
-        } break;
-
-        case SDLK_d: {
-          keys[9] = 0;
-        } break;
-
-        case SDLK_z: {
-          keys[0xA] = 0;
-        } break;
-
-        case SDLK_c: {
-          keys[0xB] = 0;
-        } break;
-
-        case SDLK_4: {
-          keys[0xC] = 0;
-        } break;
-
-        case SDLK_r: {
-          keys[0xD] = 0;
-        } break;
-
-        case SDLK_f: {
-          keys[0xE] = 0;
-        } break;
-
-        case SDLK_v: {
-          keys[0xF] = 0;
-        } break;
-        }
-      } break;
-      }
-    }
-
-    return quit;
-  }
-
-private:
-  SDL_Window *window{};
-  SDL_Renderer *renderer{};
-  SDL_Texture *texture{};
-};
-
-int main(int argc, char *argv[]) {
-  if (argc != 4) {
-    std::cerr << "Usage: " << argv[0] << " <Scale> <Delay> <ROM>\n";
-    std::exit(EXIT_FAILURE);
-  }
-
-  int videoScale = std::stoi(argv[1]);
-  int cycleDelay = std::stoi(argv[2]);
-  char const *romFilename = argv[3];
-
-  Platform platform("CHIP-8 Emulator", VIDEO_WIDTH * videoScale,
-                    VIDEO_HEIGHT * videoScale, VIDEO_WIDTH, VIDEO_HEIGHT);
-
-  Chip8 chip8;
-  chip8.loadROM(romFilename);
-
-  int videoPitch = sizeof(chip8.video[0]) * VIDEO_WIDTH;
-
-  auto lastCycleTime = std::chrono::high_resolution_clock::now();
-  bool quit = false;
-
-  while (!quit) {
-    quit = platform.ProcessInput(chip8.keypad);
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float dt = std::chrono::duration<float, std::chrono::milliseconds::period>(
-                   currentTime - lastCycleTime)
-                   .count();
-
-    if (dt > cycleDelay) {
-      lastCycleTime = currentTime;
-
-      chip8.cycle();
-
-      platform.Update(chip8.video, videoPitch);
-    }
-  }
-
-  return 0;
-}
+void Chip8::setKey(int idx, bool state) { keypad[idx] = state; }
