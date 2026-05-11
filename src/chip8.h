@@ -11,7 +11,7 @@ const unsigned int FONT_START_ADDRESS{0x050};
 constexpr unsigned int VIDEO_WIDTH{64};
 constexpr unsigned int VIDEO_HEIGHT{32};
 
-constexpr uint8_t fontset[FONTSET_SIZE]{
+constexpr std::array<uint8_t, FONTSET_SIZE> fontset{
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
     0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
@@ -75,20 +75,22 @@ public:
 
   void setKey(int idx, bool state);
 
-  uint8_t registers[16]{}; // 16 8bit general purpose registers
-  uint8_t memory[4096]{};  // 4096 bytes of memory
+  std::array<uint8_t, 16> registers{}; // 16 8bit general purpose registers
+  std::array<uint8_t, 4096> memory{};  // 4096 bytes of memory
   uint16_t index{}; // special register that holds the memory address to be used
                     // in operations
   uint16_t pc{};    // holds the next instruction
-  uint16_t stack[16]{}; // holds pc values of when a function is called, will
+
+  std::array<uint16_t, 16>
+      stack{};          // holds pc values of when a function is called, will
                         // place back into pc when return
   uint8_t sp{};         // stack pointer where we are in the stack
   uint8_t delayTimer{}; // both timers are either 0 or not 0
   uint8_t soundTimer{};
-  uint8_t keypad[16]{}; // 16 keys for the keypad
+  std::array<uint8_t, 16> keypad{}; // 16 keys for the keypad
 
-  uint32_t video[64 * 32]{}; // using uint32 for compatibility with sdl, screen
-                             // of 64 by 32
+  std::array<uint32_t, 64 * 32> video{}; // using uint32 for compatibility with
+                                         // sdl, screen of 64 by 32
   uint16_t opcode; // stores the operation, operations are 2 bytes long
   std::default_random_engine randGen;
   std::uniform_int_distribution<uint8_t> randByte;
@@ -105,12 +107,6 @@ public:
   std::array<Chip8Func, 0xE + 1> table8{};
   std::array<Chip8Func, 0xE + 1> tableE{};
   std::array<Chip8Func, 0x65 + 1> tableF{};
-
-  // Chip8Func table[0xF + 1];
-  // Chip8Func table0[0xE + 1];
-  // Chip8Func table8[0xE + 1];
-  // Chip8Func tableE[0xE + 1];
-  // Chip8Func tableF[0x65 + 1];
 
 private:
 };

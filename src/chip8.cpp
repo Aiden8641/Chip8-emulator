@@ -1,5 +1,6 @@
 #include "chip8.h"
 #include <SDL3/SDL.h>
+#include <cstdint>
 #include <fstream>
 
 // initiall set pc to 0x200 since that is going to be the first instruction
@@ -114,7 +115,10 @@ void Chip8::cycle() {
   }
 }
 
-void Chip8::OP_00E0() { memset(video, 0, sizeof(video)); }
+void Chip8::OP_00E0() {
+  // memset(video, 0, sizeof(video));
+  video.fill(0);
+}
 void Chip8::OP_00EE() {
   --sp;
   pc = stack[sp];
@@ -339,45 +343,17 @@ void Chip8::OP_Fx07() {
   registers[Vx] = delayTimer;
 }
 
-// TODO: inefficient
 void Chip8::OP_Fx0A() {
-  uint8_t Vx{static_cast<uint8_t>((opcode & 0x0F00u) >> 8u)};
+  uint8_t Vx = (opcode & 0x0F00u) >> 8u;
 
-  if (keypad[0]) {
-    registers[Vx] = 0;
-  } else if (keypad[1]) {
-    registers[Vx] = 1;
-  } else if (keypad[2]) {
-    registers[Vx] = 2;
-  } else if (keypad[3]) {
-    registers[Vx] = 3;
-  } else if (keypad[4]) {
-    registers[Vx] = 4;
-  } else if (keypad[5]) {
-    registers[Vx] = 5;
-  } else if (keypad[6]) {
-    registers[Vx] = 6;
-  } else if (keypad[7]) {
-    registers[Vx] = 7;
-  } else if (keypad[8]) {
-    registers[Vx] = 8;
-  } else if (keypad[9]) {
-    registers[Vx] = 9;
-  } else if (keypad[10]) {
-    registers[Vx] = 10;
-  } else if (keypad[11]) {
-    registers[Vx] = 11;
-  } else if (keypad[12]) {
-    registers[Vx] = 12;
-  } else if (keypad[13]) {
-    registers[Vx] = 13;
-  } else if (keypad[14]) {
-    registers[Vx] = 14;
-  } else if (keypad[15]) {
-    registers[Vx] = 15;
-  } else {
-    pc -= 2;
+  for (int i = 0; i < 16; ++i) {
+    if (keypad[i]) {
+      registers[Vx] = i;
+      return;
+    }
   }
+
+  pc -= 2;
 }
 
 void Chip8::OP_Fx15() {
@@ -404,7 +380,6 @@ void Chip8::OP_Fx29() {
   index = FONT_START_ADDRESS + (5 * registers[Vx]);
 }
 
-// BUG: instruction may be wrong
 void Chip8::OP_Fx33() {
   uint8_t Vx{static_cast<uint8_t>((opcode & 0x0F00u) >> 8u)};
 

@@ -2,10 +2,11 @@
 #define PLATFORM
 #include "chip8.h"
 #include <SDL3/SDL.h>
+#include <array>
 #include <string_view>
 
-const int WINDOW_WIDTH = 640;
-const int WINDOW_HEIGHT = 320;
+constexpr int WINDOW_WIDTH = 640;
+constexpr int WINDOW_HEIGHT = 320;
 
 class Platform {
 public:
@@ -13,7 +14,7 @@ public:
   Platform(std::string_view title);
   ~Platform();
 
-  void update(void const *buffer, int pitch);
+  void update(const std::array<uint32_t, 64 * 32> buffer, int pitch);
   void processInput(Chip8 &chip8);
 
 private:
@@ -22,5 +23,4 @@ private:
   SDL_Texture *texture = nullptr;
   const bool *key_states = SDL_GetKeyboardState(NULL);
 };
-
 #endif // !PLATFORM

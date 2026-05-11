@@ -1,6 +1,7 @@
 #include "platform.h"
 #include "chip8.h"
 // #include <SDL3/SDL.h>
+#include <array>
 #include <cstddef>
 #include <string_view>
 
@@ -27,11 +28,11 @@ Platform::~Platform() {
   SDL_Quit();
 }
 
-void Platform::update(void const *buffer, int pitch) {
+void Platform::update(const std::array<uint32_t, 64 * 32> buffer, int pitch) {
   // sdl scales the texture to the rect
   const SDL_FRect dstrect = {0, 0, WINDOW_WIDTH, WINDOW_HEIGHT};
 
-  SDL_UpdateTexture(texture, nullptr, buffer, pitch);
+  SDL_UpdateTexture(texture, nullptr, buffer.data(), pitch);
   SDL_RenderClear(renderer);
   SDL_RenderTexture(renderer, texture, nullptr, &dstrect);
   SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
