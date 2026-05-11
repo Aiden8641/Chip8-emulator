@@ -100,7 +100,7 @@ void Chip8::cycle() {
   pc += 2;
 
   // decode and execute;
-  SDL_Log("%x", opcode);
+  // SDL_Log("%x", opcode);
   ((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
   // decrement the delay timer if it's been set
