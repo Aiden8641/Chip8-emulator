@@ -39,9 +39,9 @@ int main(int argc, char *argv[]) {
     if (dt > cycleDelay) {
       lastCycleTime = currentTime;
 
-      platform.update(chip8.video, videoPitch);
-
       chip8.cycle();
+
+      platform.update(chip8.video, videoPitch);
     }
   }
 

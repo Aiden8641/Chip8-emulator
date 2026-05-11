@@ -100,6 +100,7 @@ void Chip8::cycle() {
   pc += 2;
 
   // decode and execute;
+  SDL_Log("%x", opcode);
   ((*this).*(table[(opcode & 0xF000u) >> 12u]))();
 
   // decrement the delay timer if it's been set
@@ -118,16 +119,12 @@ void Chip8::OP_00EE() {
   --sp;
   pc = stack[sp];
 }
-void Chip8::OP_1nnn() {
-  uint16_t address{static_cast<uint16_t>(opcode & 0x0FFFu)};
-  pc = address;
-}
+void Chip8::OP_1nnn() { pc = opcode & 0x0FFFu; }
 void Chip8::OP_2nnn() {
   stack[sp] = pc;
   ++sp;
 
-  uint16_t address{static_cast<uint16_t>(opcode & 0x0FFFu)};
-  pc = address;
+  pc = opcode & 0x0FFFu;
 }
 
 void Chip8::OP_3xkk() {
@@ -177,6 +174,7 @@ void Chip8::OP_8xy0() {
 
   registers[Vx] = registers[Vy];
 }
+
 void Chip8::OP_8xy1() {
   uint8_t Vx{static_cast<uint8_t>((opcode & 0x0F00u) >> 8u)};
   uint8_t Vy{static_cast<uint8_t>((opcode & 0x00F0u) >> 4u)};
@@ -273,7 +271,7 @@ void Chip8::OP_Annn() {
 void Chip8::OP_Bnnn() {
   uint16_t address{static_cast<uint16_t>(opcode & 0x0FFFu)};
 
-  pc = address + registers[0x0];
+  pc = address + registers[0];
 }
 
 void Chip8::OP_Cxkk() {
@@ -294,18 +292,22 @@ void Chip8::OP_Dxyn() {
   registers[0xF] = 0;
 
   for (int row = 0; row < height; ++row) {
-    uint8_t spriteByte{memory[index + row]};
+    uint8_t spriteByte = memory[index + row];
 
     for (int col = 0; col < 8; ++col) {
-      uint8_t spritePixel{static_cast<uint8_t>(spriteByte & (0x80 >> col))};
-      uint32_t *screenPixel{&video[(yPos + row) * VIDEO_WIDTH + (xPos + col)]};
+      uint8_t spritePixel = spriteByte & (0x80 >> col);
+
+      uint16_t x = (xPos + col) % VIDEO_WIDTH;
+      uint16_t y = (yPos + row) % VIDEO_HEIGHT;
+
+      uint32_t *screenPixel = &video[y * VIDEO_WIDTH + x];
 
       if (spritePixel) {
         if (*screenPixel == 0xFFFFFFFF) {
           registers[0xF] = 1;
         }
 
-        *screenPixel ^= 0xFFFFFFF;
+        *screenPixel ^= 0xFFFFFFFF;
       }
     }
   }
@@ -337,6 +339,7 @@ void Chip8::OP_Fx07() {
   registers[Vx] = delayTimer;
 }
 
+// TODO: inefficient
 void Chip8::OP_Fx0A() {
   uint8_t Vx{static_cast<uint8_t>((opcode & 0x0F00u) >> 8u)};
 
@@ -401,6 +404,7 @@ void Chip8::OP_Fx29() {
   index = FONT_START_ADDRESS + (5 * registers[Vx]);
 }
 
+// BUG: instruction may be wrong
 void Chip8::OP_Fx33() {
   uint8_t Vx{static_cast<uint8_t>((opcode & 0x0F00u) >> 8u)};
 
